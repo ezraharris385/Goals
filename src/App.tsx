@@ -4,6 +4,8 @@ import { GoalsView } from "./components/GoalsView";
 import { PlanView } from "./components/PlanView";
 import { ChatView } from "./components/ChatView";
 import { Settings } from "./components/Settings";
+import { Onboarding } from "./components/Onboarding";
+import { useStore } from "./store";
 
 const TABS = [
   { key: "dash", label: "Home", ico: "🏠" },
@@ -14,7 +16,12 @@ const TABS = [
 ];
 
 export default function App() {
+  const { data } = useStore();
   const [tab, setTab] = useState("dash");
+
+  if (!data.settings.onboarded && !data.settings.apiKey) {
+    return <Onboarding done={() => setTab("chat")} />;
+  }
 
   return (
     <div className="app">

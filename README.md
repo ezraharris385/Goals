@@ -26,15 +26,16 @@ Anthropic's API.
 
 ## Setup
 
-1. **Enable GitHub Pages**: repo → Settings → Pages → Source: **GitHub Actions**.
-   The included workflow (`.github/workflows/deploy.yml`) builds and deploys on
-   every push. Your app URL will be `https://<username>.github.io/goals/`.
-2. **Get an Anthropic API key** at [console.anthropic.com](https://console.anthropic.com)
-   → API Keys.
-3. On your phone, open the app URL → **Setup** tab → paste the key → Save.
-4. **Install it**: Safari → Share → *Add to Home Screen* (iPhone), or Chrome →
+1. Push (or merge) — the included workflow builds, **auto-enables GitHub Pages**,
+   and deploys. Your app URL: `https://<username>.github.io/goals/`.
+   (If the very first deploy fails, enable it once manually: repo → Settings →
+   Pages → Source: **GitHub Actions**, then re-run the workflow.)
+2. Open the URL on your phone — the welcome screen walks you through creating a
+   free Anthropic API key and pasting it in.
+3. **Install it**: Safari → Share → *Add to Home Screen* (iPhone), or Chrome →
    ⋮ → *Add to Home screen* (Android). It runs full-screen like a native app.
-5. Go to **Coaches**, pick one, and tell it what you're going after.
+4. Hit **🧠 Brain dump** on the Goals tab, paste everything you want to achieve,
+   and the AI sorts it into structured goals — or talk to the coaches one on one.
 
 ## Development
 

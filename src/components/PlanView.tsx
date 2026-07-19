@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { generatePlan } from "../ai";
+import { friendlyError, generatePlan } from "../ai";
 import { useStore } from "../store";
 import { ActionItem, DOMAIN_META, uid } from "../types";
 
@@ -57,8 +57,8 @@ export function PlanView() {
           updatedAt: new Date().toISOString(),
         },
       }));
-    } catch (e: any) {
-      setError(e?.message ?? String(e));
+    } catch (e) {
+      setError(friendlyError(e));
     } finally {
       setBusy(null);
     }

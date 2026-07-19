@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { sendChat } from "../ai";
+import { friendlyError, sendChat } from "../ai";
 import { makeToolActions } from "../actions";
 import { useStore } from "../store";
 import { Domain, DOMAIN_META, DOMAINS } from "../types";
@@ -58,8 +58,8 @@ export function ChatView() {
         ];
         return d;
       });
-    } catch (e: any) {
-      setError(e?.message ?? String(e));
+    } catch (e) {
+      setError(friendlyError(e));
     } finally {
       setBusy(false);
     }

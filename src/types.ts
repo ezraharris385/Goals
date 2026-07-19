@@ -67,7 +67,7 @@ export interface AppData {
   plans: { daily?: Plan; weekly?: Plan };
   chats: Record<Domain, ChatMsg[]>;
   assessment?: Assessment;
-  settings: { apiKey: string };
+  settings: { apiKey: string; onboarded?: boolean };
 }
 
 export const DOMAINS: Domain[] = ["health", "personal", "professional"];

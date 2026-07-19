@@ -347,4 +347,101 @@ ${contextBlock(data)}`,
   };
 }
 
+// ---------- Brain dump: paste everything, AI sorts it into goals ----------
+
+const dumpTool: Anthropic.Tool = {
+  name: "save_sorted_goals",
+  description: "Save the structured goals extracted from the user's brain dump.",
+  input_schema: {
+    type: "object",
+    properties: {
+      goals: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            ...GOAL_SCHEMA.properties,
+            domain: {
+              type: "string",
+              enum: ["health", "personal", "professional"],
+              description: "Which life area this goal belongs to",
+            },
+          },
+          required: ["title", "timeframe", "domain"],
+        },
+      },
+    },
+    required: ["goals"],
+  },
+};
+
+export interface DumpedGoal {
+  title: string;
+  domain: Domain;
+  timeframe: Timeframe;
+  why?: string;
+  metric?: string;
+  target?: string;
+  deadline?: string;
+}
+
+export async function importGoals(
+  apiKey: string,
+  text: string,
+  data: AppData
+): Promise<DumpedGoal[]> {
+  const c = client(apiKey);
+  const resp = await c.messages.create({
+    model: MODEL,
+    max_tokens: 8000,
+    system: `You turn a raw brain dump of goals into a clean, structured goal list for a high-standards goal tracker. Today is ${todayISO()}.
+
+Rules:
+- Extract EVERY distinct goal mentioned. Split compound statements into separate goals.
+- Sharpen vague goals: give each a concrete metric and target where the text allows. Don't invent specifics the user clearly didn't imply — leave metric/target empty instead.
+- Classify domain: health (body, fitness, sleep, food, mental health), professional (career, work, skills, income, business), personal (everything else — relationships, habits, money management, learning for fun, character).
+- Pick timeframe: daily/weekly/monthly/yearly for recurring-cadence goals; short_term (< ~3 months) or long_term for horizon goals.
+- Skip duplicates of these existing goals: ${data.goals.filter((g) => g.status !== "archived").map((g) => g.title).join("; ") || "(none)"}`,
+    tools: [dumpTool],
+    tool_choice: { type: "tool", name: "save_sorted_goals" },
+    messages: [{ role: "user", content: text }],
+  });
+  const toolUse = resp.content.find(
+    (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
+  );
+  if (!toolUse) throw new Error("Couldn't parse any goals from that.");
+  const input = toolUse.input as any;
+  return (input.goals ?? [])
+    .filter((g: any) => g?.title)
+    .map((g: any) => ({
+      title: g.title,
+      domain: ["health", "personal", "professional"].includes(g.domain)
+        ? g.domain
+        : "personal",
+      timeframe: TIMEFRAME_VALUES.includes(g.timeframe) ? g.timeframe : "short_term",
+      why: g.why,
+      metric: g.metric,
+      target: g.target,
+      deadline: g.deadline,
+    }));
+}
+
+// ---------- Friendly error messages ----------
+
+export function friendlyError(e: any): string {
+  const msg = String(e?.message ?? e ?? "");
+  const status = e?.status;
+  if (status === 401 || /authentication|invalid x-api-key/i.test(msg))
+    return "Your API key was rejected. Double-check it in Setup (it should start with sk-ant-).";
+  if (status === 429 || /rate limit/i.test(msg))
+    return "Hitting the rate limit — give it a minute and try again.";
+  if (status === 529 || /overloaded/i.test(msg))
+    return "Anthropic's servers are busy right now. Try again in a moment.";
+  if (/fetch|network|Failed to fetch|connection/i.test(msg))
+    return "No connection to the AI. Check your internet and try again.";
+  if (/credit|billing/i.test(msg))
+    return "Your Anthropic account is out of credits — top up at console.anthropic.com.";
+  return msg || "Something went wrong. Try again.";
+}
+
 export { uid };

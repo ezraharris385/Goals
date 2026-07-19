@@ -1,11 +1,59 @@
 import { useState } from "react";
+import { friendlyError, importGoals } from "../ai";
 import { useStore } from "../store";
-import { Domain, DOMAIN_META, DOMAINS, Timeframe, TIMEFRAMES } from "../types";
+import { Domain, DOMAIN_META, DOMAINS, Timeframe, TIMEFRAMES, uid } from "../types";
 
 export function GoalsView() {
   const { data, update } = useStore();
   const [tf, setTf] = useState<Timeframe | "all">("all");
   const [dom, setDom] = useState<Domain | "all">("all");
+  const [showDump, setShowDump] = useState(false);
+  const [dumpText, setDumpText] = useState("");
+  const [dumpBusy, setDumpBusy] = useState(false);
+  const [dumpMsg, setDumpMsg] = useState("");
+
+  const runDump = async () => {
+    if (!dumpText.trim()) return;
+    if (!data.settings.apiKey) {
+      setDumpMsg("Add your API key in Setup first.");
+      return;
+    }
+    setDumpBusy(true);
+    setDumpMsg("");
+    try {
+      const goals = await importGoals(data.settings.apiKey, dumpText, data);
+      if (!goals.length) {
+        setDumpMsg("Couldn't find any goals in that — try writing them more directly.");
+      } else {
+        update((d) => ({
+          ...d,
+          goals: [
+            ...d.goals,
+            ...goals.map((g) => ({
+              id: uid(),
+              domain: g.domain,
+              timeframe: g.timeframe,
+              title: g.title,
+              why: g.why,
+              metric: g.metric,
+              target: g.target,
+              deadline: g.deadline,
+              progress: 0,
+              status: "active" as const,
+              createdAt: new Date().toISOString(),
+            })),
+          ],
+        }));
+        setDumpText("");
+        setShowDump(false);
+        setDumpMsg("");
+      }
+    } catch (e) {
+      setDumpMsg(friendlyError(e));
+    } finally {
+      setDumpBusy(false);
+    }
+  };
 
   const goals = data.goals
     .filter((g) => g.status !== "archived")
@@ -39,6 +87,48 @@ export function GoalsView() {
       <div className="brand">The Board</div>
       <h1 className="title">Goals</h1>
       <div className="subtitle">Every front. Every horizon.</div>
+
+      <button className="big-btn" onClick={() => setShowDump(true)}>
+        🧠 Brain dump — paste all your goals at once
+      </button>
+
+      {showDump && (
+        <div className="modal-backdrop" onClick={() => !dumpBusy && setShowDump(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ marginBottom: 10 }}>Brain Dump</h3>
+            <div className="hint" style={{ marginBottom: 10 }}>
+              Write everything you want to achieve — messy is fine. The AI will split
+              it into clean goals, sort them into Health / Personal / Professional,
+              and set timeframes.
+            </div>
+            <textarea
+              className="text-input"
+              rows={7}
+              placeholder={"e.g. run a sub-4 marathon next spring, get promoted to senior by December, read 20 books this year, call my parents weekly, bench 225…"}
+              value={dumpText}
+              onChange={(e) => setDumpText(e.target.value)}
+              style={{ resize: "vertical", fontFamily: "inherit" }}
+            />
+            {dumpMsg && <div className="error-banner" style={{ marginTop: 10 }}>{dumpMsg}</div>}
+            <button
+              className="big-btn"
+              style={{ marginTop: 12 }}
+              disabled={dumpBusy || !dumpText.trim()}
+              onClick={runDump}
+            >
+              {dumpBusy ? "Sorting your goals…" : "Extract & file my goals"}
+            </button>
+            <button
+              className="big-btn secondary"
+              style={{ marginBottom: 0 }}
+              disabled={dumpBusy}
+              onClick={() => setShowDump(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="pill-row">
         <button
