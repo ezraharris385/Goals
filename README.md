@@ -1,4 +1,4 @@
-# ANIMAL — AI Goal Command Center
+# ZENITH — AI Goal Command Center
 
 A phone-first goal tracking app with three AI coach agents that push you hard:
 

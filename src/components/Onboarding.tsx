@@ -20,7 +20,7 @@ export function Onboarding({ done }: { done: () => void }) {
   return (
     <div className="screen onboard">
       <div style={{ marginTop: 30 }}>
-        <div className="brand">Animal Mode</div>
+        <div className="brand">Zenith</div>
         <h1 className="title" style={{ fontSize: 40 }}>
           High standards.
           <br />
@@ -72,7 +72,7 @@ export function Onboarding({ done }: { done: () => void }) {
           disabled={!key.trim()}
           onClick={() => start(true)}
         >
-          Let's go 🐺
+          Begin the climb ↑
         </button>
         <button
           className="big-btn secondary"

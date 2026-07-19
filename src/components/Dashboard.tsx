@@ -54,7 +54,7 @@ export function Dashboard({ goTo }: { goTo: (tab: string) => void }) {
 
   return (
     <div className="screen">
-      <div className="brand">Animal Mode</div>
+      <div className="brand">Zenith</div>
       <h1 className="title">Command Center</h1>
       <div className="subtitle">
         {new Date().toLocaleDateString("en-US", {
@@ -166,7 +166,7 @@ export function Dashboard({ goTo }: { goTo: (tab: string) => void }) {
 
       {active.length === 0 && (
         <div className="empty">
-          <div className="big">🐺</div>
+          <div className="big">◮</div>
           No goals yet. Talk to your coaches — tell them what you're going after, and
           they'll lock it in.
           <button className="big-btn" style={{ marginTop: 16 }} onClick={() => goTo("chat")}>
