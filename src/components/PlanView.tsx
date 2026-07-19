@@ -1,13 +1,28 @@
 import { useState } from "react";
 import { friendlyError, generatePlan, Intensity } from "../ai";
 import { useStore } from "../store";
-import { ActionItem, daysUntil, DOMAIN_META, uid } from "../types";
+import {
+  ActionItem,
+  Bucket,
+  BUCKET_META,
+  daysUntil,
+  Domain,
+  DOMAIN_META,
+  DOMAINS,
+  itemBucket,
+  itemUrgency,
+  sortItems,
+  uid,
+  URGENCY_META,
+} from "../types";
 
 const INTENSITIES: { key: Intensity; label: string; desc: string }[] = [
   { key: "steady", label: "Steady", desc: "Sustainable, disciplined pace" },
   { key: "push", label: "Push", desc: "Demanding — includes stretch work" },
-  { key: "max", label: "Max", desc: "Peak output. Every hour assigned." },
+  { key: "max", label: "Max", desc: "Peak output. Pack the day." },
 ];
+
+const BUCKETS: Bucket[] = ["must_do", "routine", "long_term"];
 
 function fmtDate(iso: string) {
   const [y, m, d] = iso.split("-").map(Number);
@@ -18,6 +33,36 @@ function fmtDate(iso: string) {
   });
 }
 
+function ItemRow({
+  it,
+  onToggle,
+}: {
+  it: ActionItem;
+  onToggle: () => void;
+}) {
+  const urg = URGENCY_META[itemUrgency(it)];
+  return (
+    <div className={`action ${it.done ? "done-row" : ""}`}>
+      <button className={`action-check ${it.done ? "done" : ""}`} onClick={onToggle}>
+        {it.done ? "✓" : ""}
+      </button>
+      <div>
+        <div className="action-text">
+          {urg.label && !it.done && (
+            <span className="urg-tag" style={{ color: urg.color, borderColor: urg.color }}>
+              {urg.label}
+            </span>
+          )}
+          {it.text}
+        </div>
+        <div className="action-meta" style={{ color: DOMAIN_META[it.domain].color }}>
+          {DOMAIN_META[it.domain].emoji} {DOMAIN_META[it.domain].label}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function PlanView() {
   const { data, update } = useStore();
   const [busy, setBusy] = useState<"daily" | "weekly" | null>(null);
@@ -25,6 +70,7 @@ export function PlanView() {
   const [setup, setSetup] = useState<"daily" | "weekly" | null>(null);
   const [focus, setFocus] = useState("");
   const [intensity, setIntensity] = useState<Intensity>("push");
+  const [dom, setDom] = useState<Domain | "all">("all");
 
   const openSetup = (scope: "daily" | "weekly") => {
     if (!data.settings.apiKey) {
@@ -53,9 +99,10 @@ export function PlanView() {
         id: uid(),
         text: it.text,
         date: it.date,
-        time: it.time,
         domain: it.domain,
         goalId: it.goal_id,
+        bucket: it.bucket,
+        urgency: it.urgency,
         done: false,
       }));
       update((d) => ({
@@ -90,45 +137,63 @@ export function PlanView() {
       return d;
     });
 
-  const renderPlan = (scope: "daily" | "weekly") => {
-    const plan = data.plans[scope];
+  const filterItems = (items: ActionItem[]) =>
+    items.filter((i) => dom === "all" || i.domain === dom);
+
+  const renderDaily = () => {
+    const plan = data.plans.daily;
     if (!plan) return null;
+    const items = filterItems(plan.items);
+    return (
+      <div className="card" key="daily">
+        <h3>Today's Plan · {plan.focus}</h3>
+        {BUCKETS.map((b) => {
+          const list = items.filter((i) => itemBucket(i) === b).sort(sortItems);
+          if (!list.length) return null;
+          return (
+            <div key={b}>
+              <div className="bucket-header">
+                {BUCKET_META[b].emoji} {BUCKET_META[b].label}
+              </div>
+              {list.map((it) => (
+                <ItemRow key={it.id} it={it} onToggle={() => toggle("daily", it.id)} />
+              ))}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const renderWeekly = () => {
+    const plan = data.plans.weekly;
+    if (!plan) return null;
+    const items = filterItems(plan.items);
     const byDate = new Map<string, ActionItem[]>();
-    for (const it of plan.items) {
-      byDate.set(it.date, [...(byDate.get(it.date) ?? []), it]);
-    }
+    for (const it of items) byDate.set(it.date, [...(byDate.get(it.date) ?? []), it]);
     const dates = [...byDate.keys()].sort();
     return (
-      <div className="card" key={scope}>
-        <h3>
-          {scope === "daily" ? "Today's Plan" : "This Week"} · {plan.focus}
-        </h3>
+      <div className="card" key="weekly">
+        <h3>This Week · {plan.focus}</h3>
         {dates.map((date) => (
           <div key={date}>
-            {scope === "weekly" && <div className="date-header">{fmtDate(date)}</div>}
+            <div className="date-header">{fmtDate(date)}</div>
             {byDate
               .get(date)!
-              .sort((a, b) => (a.time ?? "99").localeCompare(b.time ?? "99"))
-              .map((it) => (
-                <div className={`action ${it.done ? "done-row" : ""}`} key={it.id}>
-                  <button
-                    className={`action-check ${it.done ? "done" : ""}`}
-                    onClick={() => toggle(scope, it.id)}
-                  >
-                    {it.done ? "✓" : ""}
-                  </button>
-                  <div>
-                    <div className="action-text">{it.text}</div>
-                    <div
-                      className="action-meta"
-                      style={{ color: DOMAIN_META[it.domain].color }}
-                    >
-                      {it.time ? `${it.time} · ` : ""}
-                      {DOMAIN_META[it.domain].label}
+              .sort(sortItems)
+              .map((it) => {
+                const b = itemBucket(it);
+                return (
+                  <div key={it.id} style={{ display: "flex", alignItems: "flex-start" }}>
+                    <span className="bucket-dot" title={BUCKET_META[b].label}>
+                      {BUCKET_META[b].emoji}
+                    </span>
+                    <div style={{ flex: 1 }}>
+                      <ItemRow it={it} onToggle={() => toggle("weekly", it.id)} />
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
           </div>
         ))}
       </div>
@@ -140,7 +205,7 @@ export function PlanView() {
       <div className="brand">Marching Orders</div>
       <h1 className="title">The Plan</h1>
       <div className="subtitle">
-        Not goals — the exact work that gets you there, on real dates.
+        Not goals — the exact work that gets you there. You pick when; it tells you what.
       </div>
 
       {error && <div className="error-banner">{error}</div>}
@@ -155,6 +220,27 @@ export function PlanView() {
       >
         {busy === "weekly" ? "Mapping the week…" : "🗓 Generate this week's plan"}
       </button>
+
+      {(data.plans.daily || data.plans.weekly) && (
+        <div className="pill-row">
+          <button
+            className={`pill ${dom === "all" ? "active" : ""}`}
+            onClick={() => setDom("all")}
+          >
+            All
+          </button>
+          {DOMAINS.map((d) => (
+            <button
+              key={d}
+              className={`pill ${dom === d ? "domain-active" : ""}`}
+              style={dom === d ? { background: DOMAIN_META[d].color } : {}}
+              onClick={() => setDom(d)}
+            >
+              {DOMAIN_META[d].emoji} {DOMAIN_META[d].label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {(() => {
         const soon = data.events
@@ -230,14 +316,15 @@ export function PlanView() {
         </div>
       )}
 
-      {renderPlan("daily")}
-      {renderPlan("weekly")}
+      {renderDaily()}
+      {renderWeekly()}
 
       {!data.plans.daily && !data.plans.weekly && (
         <div className="empty">
           <div className="big">🗡️</div>
-          Generate a plan and the head coach will turn your goals into specific,
-          time-boxed actions — weighted toward whatever you're behind on.
+          Generate a plan and the head coach will split your work into what MUST
+          happen today, your everyday routines, and long-game progress — ranked by
+          urgency.
         </div>
       )}
     </div>

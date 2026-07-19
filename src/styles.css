@@ -588,6 +588,35 @@ textarea.text-input { line-height: 1.5; }
 .event-btns { display: flex; gap: 6px; }
 .event-btns .mini-btn { flex: none; padding: 8px 12px; }
 
+/* ---------- buckets & urgency ---------- */
+.bucket-header {
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text);
+  margin: 16px 0 2px;
+}
+.bucket-header:first-of-type { margin-top: 4px; }
+
+.bucket-dot {
+  font-size: 13px;
+  margin-top: 14px;
+  margin-right: 6px;
+}
+
+.urg-tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  border: 1px solid;
+  border-radius: 6px;
+  padding: 1px 6px;
+  margin-right: 7px;
+  vertical-align: 2px;
+}
+
 /* ---------- form grid & intensity ---------- */
 .form-grid {
   display: grid;

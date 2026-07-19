@@ -41,14 +41,41 @@ export interface EventItem {
   done: boolean;
 }
 
+export type Bucket = "must_do" | "routine" | "long_term";
+export type Urgency = "critical" | "high" | "normal";
+
 export interface ActionItem {
   id: string;
   text: string;
-  date: string; // ISO date this must happen
-  time?: string; // e.g. "06:00"
+  date: string; // ISO date this belongs to
+  time?: string; // legacy — no longer generated or shown
   domain: Domain;
   goalId?: string;
+  bucket?: Bucket;
+  urgency?: Urgency;
   done: boolean;
+}
+
+export const BUCKET_META: Record<Bucket, { label: string; emoji: string; order: number }> = {
+  must_do: { label: "Must do today", emoji: "🔥", order: 0 },
+  routine: { label: "Every day", emoji: "🔁", order: 1 },
+  long_term: { label: "Long game", emoji: "📈", order: 2 },
+};
+
+export const URGENCY_META: Record<Urgency, { label: string; color: string; order: number }> = {
+  critical: { label: "URGENT", color: "#f87171", order: 0 },
+  high: { label: "HIGH", color: "#fbbf24", order: 1 },
+  normal: { label: "", color: "", order: 2 },
+};
+
+export const itemBucket = (i: ActionItem): Bucket => i.bucket ?? "must_do";
+export const itemUrgency = (i: ActionItem): Urgency => i.urgency ?? "normal";
+
+export function sortItems(a: ActionItem, b: ActionItem): number {
+  return (
+    BUCKET_META[itemBucket(a)].order - BUCKET_META[itemBucket(b)].order ||
+    URGENCY_META[itemUrgency(a)].order - URGENCY_META[itemUrgency(b)].order
+  );
 }
 
 export interface Plan {

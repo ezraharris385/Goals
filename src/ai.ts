@@ -345,17 +345,25 @@ const planTool: Anthropic.Tool = {
             text: {
               type: "string",
               description:
-                "A concrete, executable action (not a goal). Specific numbers, durations, deliverables.",
+                "A concrete, executable action (not a goal). Specific numbers, durations, deliverables. Never include a time of day.",
             },
-            date: { type: "string", description: "ISO date YYYY-MM-DD this happens" },
-            time: {
-              type: "string",
-              description: "Suggested time HH:MM 24h, when timing matters",
-            },
+            date: { type: "string", description: "ISO date YYYY-MM-DD this belongs to" },
             domain: { type: "string", enum: ["health", "personal", "professional"] },
             goal_id: { type: "string", description: "The goal id this action serves" },
+            bucket: {
+              type: "string",
+              enum: ["must_do", "routine", "long_term"],
+              description:
+                "must_do: has to happen on this specific date (deadline, event prep, date-critical). routine: an everyday recurring habit. long_term: moves a longer-horizon goal forward.",
+            },
+            urgency: {
+              type: "string",
+              enum: ["critical", "high", "normal"],
+              description:
+                "critical: skipping it has real consequences. high: important, should not slip. normal: everything else.",
+            },
           },
-          required: ["text", "date", "domain"],
+          required: ["text", "date", "domain", "bucket", "urgency"],
         },
       },
       doing_well: {
@@ -383,9 +391,10 @@ export interface GeneratedPlan {
   items: {
     text: string;
     date: string;
-    time?: string;
     domain: Domain;
     goal_id?: string;
+    bucket: "must_do" | "routine" | "long_term";
+    urgency: "critical" | "high" | "normal";
   }[];
   doingWell: string[];
   needsWork: string[];
@@ -400,7 +409,7 @@ const INTENSITY_GUIDE: Record<Intensity, string> = {
   push:
     "PUSH intensity: a demanding load — roughly 6-9 items per day, include at least one stretch action outside the comfort zone.",
   max:
-    "MAX intensity: peak output — pack the schedule tight (8-12 items per day), early start, every open hour assigned. Only what moves the needle.",
+    "MAX intensity: peak output — pack the day (8-12 items). Only what moves the needle.",
 };
 
 export async function generatePlan(
@@ -412,7 +421,7 @@ export async function generatePlan(
   const c = client(apiKey);
   const horizon =
     scope === "daily"
-      ? `TODAY, ${todayISO()}. Every item dated ${todayISO()}, ordered by suggested time.`
+      ? `TODAY, ${todayISO()}. Every item dated ${todayISO()}.`
       : `THE NEXT 7 DAYS starting ${todayISO()}. Spread items across real dates with the actual weekday rhythm in mind (weekday vs weekend).`;
 
   const resp = await c.messages.create({
@@ -426,10 +435,13 @@ ${INTENSITY_GUIDE[opts.intensity]}
 ${opts.focus ? `The user's stated focus for this period: "${opts.focus}". Build the plan around it while keeping other goals from stalling.` : ""}
 
 Rules:
-- Items are ACTIONS, not goals: "45 min zone-2 run at 6:00", not "exercise more". Specific numbers, durations, deliverables.
+- Items are ACTIONS, not goals: "45 min zone-2 run", not "exercise more". Specific numbers, durations, deliverables.
+- NEVER include a time of day in any item — no "at 6:00", no "morning run". The user decides when. Describe only WHAT must get done.
+- Classify every item into a bucket: must_do (has to happen on that specific date — deadlines, event prep, date-critical work), routine (everyday recurring habits like daily training or reading), long_term (advances a longer-horizon goal that isn't date-critical today).
+- Rank every item's urgency honestly: critical only when skipping it has real consequences; most items are high or normal. Don't inflate.
 - Every item must trace to a real goal id from current_state when possible.
 - Use the PACE data: weight the plan toward DATED goals marked BEHIND their timeline, and toward near deadlines. Keep ROUTINE goals present every day they apply.
-- Check upcoming events: schedule prep actions ahead of any event inside (or just after) this period, and never schedule conflicting work at an event's date/time.
+- Check upcoming events: schedule prep actions ahead of any event inside (or just after) this period as must_do items.
 - Be honest in doing_well / needs_work — reference the pace data and where the timeline says they should be. If recent check-ins are empty, say so in needs_work: showing up to report is the first standard.
 - push_message: talk like a coach who expects greatness. Direct, personal, no clichés.
 
@@ -454,11 +466,16 @@ ${contextBlock(data)}`,
     items: (input.items ?? []).map((it: any) => ({
       text: it.text,
       date: it.date,
-      time: it.time,
       domain: (["health", "personal", "professional"].includes(it.domain)
         ? it.domain
         : "personal") as Domain,
       goal_id: it.goal_id,
+      bucket: ["must_do", "routine", "long_term"].includes(it.bucket)
+        ? it.bucket
+        : "long_term",
+      urgency: ["critical", "high", "normal"].includes(it.urgency)
+        ? it.urgency
+        : "normal",
     })),
     doingWell: input.doing_well ?? [],
     needsWork: input.needs_work ?? [],

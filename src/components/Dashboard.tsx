@@ -1,5 +1,15 @@
 import { useStore } from "../store";
-import { daysUntil, DOMAINS, DOMAIN_META, todayISO } from "../types";
+import {
+  BUCKET_META,
+  daysUntil,
+  DOMAINS,
+  DOMAIN_META,
+  itemBucket,
+  itemUrgency,
+  sortItems,
+  todayISO,
+  URGENCY_META,
+} from "../types";
 import { Ring } from "./Ring";
 
 function computeStreak(dates: Set<string>): number {
@@ -38,7 +48,7 @@ export function Dashboard({ goTo }: { goTo: (tab: string) => void }) {
     ...(data.plans.weekly?.items ?? []),
   ]
     .filter((i) => i.date === today)
-    .sort((a, b) => (a.time ?? "99").localeCompare(b.time ?? "99"));
+    .sort(sortItems);
   const doneToday = todaysItems.filter((i) => i.done).length;
 
   const toggleItem = (id: string) =>
@@ -123,23 +133,36 @@ export function Dashboard({ goTo }: { goTo: (tab: string) => void }) {
             </button>
           </div>
         ) : (
-          todaysItems.map((it) => (
-            <div className={`action ${it.done ? "done-row" : ""}`} key={it.id}>
-              <button
-                className={`action-check ${it.done ? "done" : ""}`}
-                onClick={() => toggleItem(it.id)}
-              >
-                {it.done ? "✓" : ""}
-              </button>
-              <div>
-                <div className="action-text">{it.text}</div>
-                <div className="action-meta" style={{ color: DOMAIN_META[it.domain].color }}>
-                  {it.time ? `${it.time} · ` : ""}
-                  {DOMAIN_META[it.domain].label}
+          todaysItems.map((it) => {
+            const urg = URGENCY_META[itemUrgency(it)];
+            const b = BUCKET_META[itemBucket(it)];
+            return (
+              <div className={`action ${it.done ? "done-row" : ""}`} key={it.id}>
+                <button
+                  className={`action-check ${it.done ? "done" : ""}`}
+                  onClick={() => toggleItem(it.id)}
+                >
+                  {it.done ? "✓" : ""}
+                </button>
+                <div>
+                  <div className="action-text">
+                    {urg.label && !it.done && (
+                      <span
+                        className="urg-tag"
+                        style={{ color: urg.color, borderColor: urg.color }}
+                      >
+                        {urg.label}
+                      </span>
+                    )}
+                    {it.text}
+                  </div>
+                  <div className="action-meta" style={{ color: DOMAIN_META[it.domain].color }}>
+                    {b.emoji} {b.label} · {DOMAIN_META[it.domain].label}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 
