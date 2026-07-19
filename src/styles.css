@@ -308,6 +308,17 @@ h1.title {
 .agent-chip .a-domain { font-size: 11px; color: var(--text-dim); font-weight: 600; }
 .agent-chip.active { border-width: 2px; }
 
+.bp-btn {
+  width: 100%;
+  background: var(--bg-card);
+  border: 1px dashed var(--line);
+  border-radius: 14px;
+  font-weight: 800;
+  font-size: 13px;
+  padding: 12px;
+  margin-bottom: 14px;
+}
+
 .chat-scroll {
   display: flex;
   flex-direction: column;

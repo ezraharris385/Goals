@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { friendlyError, sendChat } from "../ai";
+import { buildBlueprint, friendlyError, sendChat } from "../ai";
 import { makeToolActions } from "../actions";
 import { useStore } from "../store";
-import { Domain, DOMAIN_META, DOMAINS } from "../types";
+import { Domain, DOMAIN_META, DOMAINS, uid } from "../types";
 
 const INTROS: Record<Domain, string> = {
   health:
@@ -19,6 +19,12 @@ export function ChatView() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [showBp, setShowBp] = useState(false);
+  const [bpOutcome, setBpOutcome] = useState("");
+  const [bpDate, setBpDate] = useState("");
+  const [bpCurrent, setBpCurrent] = useState("");
+  const [bpBusy, setBpBusy] = useState(false);
+  const [bpMsg, setBpMsg] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const messages = data.chats[domain] ?? [];
@@ -65,6 +71,89 @@ export function ChatView() {
     }
   };
 
+  const runBlueprint = async () => {
+    if (!bpOutcome.trim()) return;
+    if (!data.settings.apiKey) {
+      setBpMsg("Add your API key in Setup first.");
+      return;
+    }
+    setBpBusy(true);
+    setBpMsg("");
+    try {
+      const bp = await buildBlueprint(
+        data.settings.apiKey,
+        domain,
+        {
+          outcome: bpOutcome.trim(),
+          targetDate: bpDate || undefined,
+          current: bpCurrent.trim() || undefined,
+        },
+        data
+      );
+      const now = new Date().toISOString();
+      update((d) => {
+        d.goals.push({
+          id: uid(),
+          domain,
+          timeframe: "long_term",
+          title: bp.outcome.title,
+          why: bp.outcome.why,
+          metric: bp.outcome.metric,
+          target: bp.outcome.target,
+          deadline: bp.outcome.deadline,
+          progress: 0,
+          status: "active",
+          createdAt: now,
+        });
+        for (const m of bp.milestones) {
+          d.goals.push({
+            id: uid(),
+            domain,
+            timeframe: "short_term",
+            title: m.title,
+            why: `Milestone toward: ${bp.outcome.title}`,
+            metric: m.metric,
+            target: m.target,
+            deadline: m.deadline,
+            progress: 0,
+            status: "active",
+            createdAt: now,
+          });
+        }
+        for (const r of bp.routines) {
+          d.goals.push({
+            id: uid(),
+            domain,
+            timeframe: r.timeframe,
+            title: r.title,
+            why: `Compounds toward: ${bp.outcome.title}`,
+            metric: r.metric,
+            progress: 0,
+            status: "active",
+            createdAt: now,
+          });
+        }
+        d.chats[domain] = [
+          ...(d.chats[domain] ?? []),
+          {
+            role: "assistant",
+            content: `🏔 BLUEPRINT: ${bp.outcome.title} — by ${bp.outcome.deadline}\n\n${bp.summary}\n\nFiled on your board: the summit goal, ${bp.milestones.length} milestone${bp.milestones.length === 1 ? "" : "s"} with staged deadlines${bp.milestones.length ? ` (first: "${bp.milestones[0].title}" by ${bp.milestones[0].deadline})` : ""}, and ${bp.routines.length} routine${bp.routines.length === 1 ? "" : "s"}. Report to me as you knock them down.`,
+            at: new Date().toISOString(),
+          },
+        ];
+        return d;
+      });
+      setShowBp(false);
+      setBpOutcome("");
+      setBpDate("");
+      setBpCurrent("");
+    } catch (e) {
+      setBpMsg(friendlyError(e));
+    } finally {
+      setBpBusy(false);
+    }
+  };
+
   const meta = DOMAIN_META[domain];
 
   return (
@@ -94,6 +183,14 @@ export function ChatView() {
         })}
       </div>
 
+      <button
+        className="bp-btn"
+        style={{ borderColor: `${meta.color}55`, color: meta.color }}
+        onClick={() => setShowBp(true)}
+      >
+        🏔 Blueprint a big outcome with {meta.agent}
+      </button>
+
       {error && <div className="error-banner">{error}</div>}
 
       <div className="chat-scroll">
@@ -112,6 +209,71 @@ export function ChatView() {
         )}
         <div ref={bottomRef} />
       </div>
+
+      {showBp && (
+        <div className="modal-backdrop" onClick={() => !bpBusy && setShowBp(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ marginBottom: 6 }}>🏔 Blueprint with {meta.agent}</h3>
+            <div className="hint" style={{ marginBottom: 4 }}>
+              Give {meta.agent} a big, broad outcome — not a normal goal. It'll
+              analyze what it takes and file the full path: the summit goal, staged
+              milestones with deadlines, and the routines that compound toward it.
+            </div>
+            <div className="field-label">The outcome</div>
+            <textarea
+              className="text-input"
+              rows={3}
+              placeholder={
+                domain === "health"
+                  ? "e.g. run a 100-mile ultra, get to 12% body fat and stay there"
+                  : domain === "professional"
+                    ? "e.g. make senior engineer, grow my side business to $5k/mo"
+                    : "e.g. become fluent in Spanish, buy a house"
+              }
+              value={bpOutcome}
+              onChange={(e) => setBpOutcome(e.target.value)}
+              style={{ resize: "vertical", fontFamily: "inherit" }}
+            />
+            <div className="form-grid">
+              <div>
+                <div className="field-label">Target date (optional)</div>
+                <input
+                  className="text-input"
+                  type="date"
+                  value={bpDate}
+                  onChange={(e) => setBpDate(e.target.value)}
+                />
+              </div>
+              <div>
+                <div className="field-label">Where you are now (optional)</div>
+                <input
+                  className="text-input"
+                  placeholder="e.g. can run 10k today"
+                  value={bpCurrent}
+                  onChange={(e) => setBpCurrent(e.target.value)}
+                />
+              </div>
+            </div>
+            {bpMsg && <div className="error-banner" style={{ marginTop: 10 }}>{bpMsg}</div>}
+            <button
+              className="big-btn"
+              style={{ marginTop: 14 }}
+              disabled={bpBusy || !bpOutcome.trim()}
+              onClick={runBlueprint}
+            >
+              {bpBusy ? `${meta.agent} is mapping the path…` : "Analyze & build the path →"}
+            </button>
+            <button
+              className="big-btn secondary"
+              style={{ marginBottom: 0 }}
+              disabled={bpBusy}
+              onClick={() => setShowBp(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="chat-input-bar">
         <input

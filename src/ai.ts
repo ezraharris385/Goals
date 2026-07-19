@@ -562,6 +562,122 @@ Rules:
     }));
 }
 
+// ---------- Blueprint: break a broad outcome into a staged path ----------
+
+const blueprintTool: Anthropic.Tool = {
+  name: "create_blueprint",
+  description:
+    "Break a broad outcome into a summit goal, staged milestones with deadlines, and supporting routines.",
+  input_schema: {
+    type: "object",
+    properties: {
+      summary: {
+        type: "string",
+        description:
+          "3-6 sentences in your coach voice: the path, why this timeline is realistic-but-ambitious, and what the make-or-break factor is.",
+      },
+      outcome: {
+        type: "object",
+        description: "The summit — the broad outcome as a single long-term goal.",
+        properties: {
+          title: { type: "string" },
+          why: { type: "string" },
+          metric: { type: "string", description: "How success is ultimately measured" },
+          target: { type: "string", description: "The concrete end state" },
+          deadline: { type: "string", description: "ISO date — realistic but ambitious" },
+        },
+        required: ["title", "deadline"],
+      },
+      milestones: {
+        type: "array",
+        description:
+          "3-6 sequential stepping stones, each with a staged deadline between now and the outcome deadline. Each must be independently verifiable.",
+        items: {
+          type: "object",
+          properties: {
+            title: { type: "string" },
+            metric: { type: "string" },
+            target: { type: "string" },
+            deadline: { type: "string", description: "ISO date, staged in order" },
+          },
+          required: ["title", "deadline"],
+        },
+      },
+      routines: {
+        type: "array",
+        description:
+          "1-3 recurring habits that compound toward the outcome (daily or weekly cadence).",
+        items: {
+          type: "object",
+          properties: {
+            title: { type: "string" },
+            timeframe: { type: "string", enum: ["daily", "weekly"] },
+            metric: { type: "string" },
+          },
+          required: ["title", "timeframe"],
+        },
+      },
+    },
+    required: ["summary", "outcome", "milestones", "routines"],
+  },
+};
+
+export interface Blueprint {
+  summary: string;
+  outcome: { title: string; why?: string; metric?: string; target?: string; deadline: string };
+  milestones: { title: string; metric?: string; target?: string; deadline: string }[];
+  routines: { title: string; timeframe: "daily" | "weekly"; metric?: string }[];
+}
+
+export async function buildBlueprint(
+  apiKey: string,
+  domain: Domain,
+  input: { outcome: string; targetDate?: string; current?: string },
+  data: AppData
+): Promise<Blueprint> {
+  const c = client(apiKey);
+  const resp = await c.messages.create({
+    model: MODEL,
+    max_tokens: 8000,
+    system: `${PERSONAS[domain]}
+
+The user is handing you a BROAD OUTCOME — not a normal goal. Your job is strategy: analyze what it actually takes, then lay out the path as a blueprint.
+
+Today is ${todayISO()}.
+${input.targetDate ? `The user wants to reach it by ${input.targetDate} — honor this unless it's delusional, and say so in the summary if you adjust it.` : "No target date given — propose a realistic-but-ambitious one."}
+${input.current ? `Where they are now: "${input.current}"` : ""}
+
+Blueprint rules:
+- The outcome becomes ONE summit goal with a hard deadline and a concrete success metric.
+- Break the path into 3-6 sequential milestones. Each is independently verifiable ("first client signed", not "make progress on clients") with staged deadlines that pace correctly toward the summit — front-load the foundational work.
+- Add 1-3 recurring routines (daily/weekly) that compound toward the outcome.
+- Be honest about the timeline. If their target date is unrealistic, stage the milestones to show what the date actually demands and flag it in the summary.
+- Don't duplicate goals that already exist in current_state.
+
+${contextBlock(data, domain)}`,
+    tools: [blueprintTool],
+    tool_choice: { type: "tool", name: "create_blueprint" },
+    messages: [{ role: "user", content: `Blueprint this outcome: ${input.outcome}` }],
+  });
+  const toolUse = resp.content.find(
+    (b): b is Anthropic.ToolUseBlock => b.type === "tool_use"
+  );
+  if (!toolUse) throw new Error("No blueprint returned.");
+  const i = toolUse.input as any;
+  if (!i?.outcome?.title) throw new Error("Blueprint came back incomplete — try rephrasing.");
+  return {
+    summary: i.summary ?? "",
+    outcome: i.outcome,
+    milestones: (i.milestones ?? []).filter((m: any) => m?.title),
+    routines: (i.routines ?? [])
+      .filter((r: any) => r?.title)
+      .map((r: any) => ({
+        ...r,
+        timeframe: r.timeframe === "weekly" ? "weekly" : "daily",
+      })),
+  };
+}
+
 // ---------- Friendly error messages ----------
 
 export function friendlyError(e: any): string {
