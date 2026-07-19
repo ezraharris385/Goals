@@ -2,9 +2,12 @@ import Anthropic from "@anthropic-ai/sdk";
 import {
   AppData,
   ChatMsg,
+  daysUntil,
   Domain,
   DOMAIN_META,
   Goal,
+  goalPace,
+  isRoutine,
   Timeframe,
   uid,
   todayISO,
@@ -104,6 +107,56 @@ const chatTools: Anthropic.Tool[] = [
       required: ["id"],
     },
   },
+  {
+    name: "save_events",
+    description:
+      "Save date-specific upcoming events the user mentions — interviews, races, exams, launches, meetings, deadlines-as-moments. These are NOT recurring goals; they are things happening on a specific date the user must be ready for. If sustained preparation is also needed, save a goal too.",
+    input_schema: {
+      type: "object",
+      properties: {
+        events: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              title: { type: "string" },
+              date: { type: "string", description: "ISO date YYYY-MM-DD" },
+              time: { type: "string", description: "HH:MM 24h if known" },
+              notes: { type: "string", description: "What to prepare / watch out for" },
+            },
+            required: ["title", "date"],
+          },
+        },
+      },
+      required: ["events"],
+    },
+  },
+  {
+    name: "update_event",
+    description:
+      "Update or complete an upcoming event by id (reschedule, rename, mark done).",
+    input_schema: {
+      type: "object",
+      properties: {
+        id: { type: "string" },
+        title: { type: "string" },
+        date: { type: "string" },
+        time: { type: "string" },
+        notes: { type: "string" },
+        done: { type: "boolean" },
+      },
+      required: ["id"],
+    },
+  },
+  {
+    name: "delete_event",
+    description: "Remove an event the user explicitly wants deleted.",
+    input_schema: {
+      type: "object",
+      properties: { id: { type: "string" } },
+      required: ["id"],
+    },
+  },
 ];
 
 // ---------- System prompts ----------
@@ -114,17 +167,59 @@ const PERSONAS: Record<Domain, string> = {
   professional: `You are CLIMB, the career & professional coach. Skills, output, reputation, income, ambition. You think like a demanding mentor who believes the user is capable of far more than they're currently producing, and says so. Concrete deliverables and deadlines over vibes.`,
 };
 
+function goalLine(g: Goal): string {
+  const pace = goalPace(g);
+  const bits = [
+    `[id:${g.id}] (${g.domain}) "${g.title}" — ${g.progress}%`,
+    isRoutine(g) ? "ROUTINE" : "DATED",
+    g.metric ? `metric: ${g.metric}` : "",
+    g.target ? `target: ${g.target}` : "",
+    g.deadline
+      ? `deadline: ${g.deadline} (${daysUntil(g.deadline)} days away)`
+      : "",
+    pace
+      ? `pace: should be at ~${pace.expected}% by now → ${pace.label.toUpperCase()} (${pace.delta >= 0 ? "+" : ""}${pace.delta})`
+      : "",
+    g.status !== "active" ? `status: ${g.status}` : "",
+  ].filter(Boolean);
+  return "- " + bits.join(" — ");
+}
+
+const TF_ORDER: Timeframe[] = [
+  "daily",
+  "weekly",
+  "monthly",
+  "yearly",
+  "short_term",
+  "long_term",
+];
+
 function contextBlock(data: AppData, domain?: Domain) {
   const now = new Date();
   const goals = data.goals.filter(
     (g) => g.status !== "archived" && (!domain || g.domain === domain)
   );
+  const byTf = TF_ORDER.map((tf) => {
+    const list = goals.filter((g) => g.timeframe === tf);
+    return list.length
+      ? `${tf.toUpperCase()}:\n${list.map(goalLine).join("\n")}`
+      : "";
+  })
+    .filter(Boolean)
+    .join("\n");
+  const upcoming = data.events
+    .filter((e) => !e.done && daysUntil(e.date) >= 0)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, 12);
   const recentEntries = data.entries.slice(-15);
   return `<current_state>
 Today: ${todayISO()} (${now.toLocaleDateString("en-US", { weekday: "long" })}), local time ${now.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}.
 
-Goals${domain ? ` (${domain})` : ""}:
-${goals.length ? goals.map((g) => `- [id:${g.id}] (${g.domain}/${g.timeframe}) "${g.title}" — progress ${g.progress}% — metric: ${g.metric ?? "none set"} — target: ${g.target ?? "none"} — deadline: ${g.deadline ?? "none"} — status: ${g.status}`).join("\n") : "(none yet)"}
+Goals${domain ? ` (${domain})` : ""}, grouped by timeframe. ROUTINE = recurring habit cadence; DATED = marching toward a deadline. Pace shows where progress should be in the grand scheme of the goal's timeline:
+${byTf || "(none yet)"}
+
+Upcoming events (date-specific, not everyday goals):
+${upcoming.length ? upcoming.map((e) => `- [event:${e.id}] ${e.date}${e.time ? ` ${e.time}` : ""} (${daysUntil(e.date)} days away, ${e.domain}): ${e.title}${e.notes ? ` — ${e.notes}` : ""}`).join("\n") : "(none)"}
 
 Recent check-ins:
 ${recentEntries.length ? recentEntries.map((e) => `- ${e.date} (${e.domain}): ${e.text}`).join("\n") : "(none yet)"}
@@ -138,11 +233,14 @@ You are one of three coach agents inside ZENITH, the user's personal goal comman
 
 How you operate:
 - When the user shares a goal — even loosely — interrogate it briefly if needed (one or two sharp questions max), then SAVE it with the save_goals tool as a specific, measurable goal with the right timeframe. Don't let vague goals live. "Get fit" becomes a metric and a deadline.
+- LOCATE the specific goal before acting. current_state groups goals by timeframe with pace data — when the user mentions work, match it to the exact goal id in the relevant timeframe (e.g. "did my pushups" → the daily ROUTINE goal; "studied for the exam" → the DATED goal with that deadline). Name the goal you're updating so they know you're tracking the right thing.
+- Distinguish ROUTINE from DATE-SPECIFIC. Recurring habits (pushups, weekly reviews) are daily/weekly goals. Things happening on a specific date (interview, race, exam, launch, trip) are EVENTS — save them with save_events so they show on the upcoming radar. If an event also needs sustained prep, save a goal for the prep too and mention both.
+- Use the pace data. If a DATED goal is BEHIND its timeline, say so with the numbers and make it today's priority. If AHEAD, acknowledge it and raise the bar. The grand scheme matters: connect today's work to where the timeline says they should be.
 - When the user reports what they did (or didn't do), log it with log_entry and update the relevant goal's progress with update_goal. Give a blunt assessment. Praise real wins hard; call out weak efforts directly.
 - Push. High standards, zero contempt. You're demanding because you believe in their ceiling. Never coddle, never lecture for paragraphs.
 - Keep replies tight: 2-6 sentences usually. Punchy. Ask one question at a time. This is a phone app — no walls of text, no headers, minimal lists.
 - Only handle ${DOMAIN_META[domain].label.toLowerCase()} topics; if the user brings up another life area, give one line and point them to the right coach (IRON=health, NORTH=personal, CLIMB=professional).
-- Use the goal ids from current_state when updating. Never invent ids.
+- Use the goal/event ids from current_state when updating. Never invent ids.
 
 ${contextBlock(data, domain)}`;
 }
@@ -154,6 +252,9 @@ export interface ToolActions {
   updateGoal: (input: any) => string;
   logEntry: (input: any) => string;
   deleteGoal: (id: string) => string;
+  saveEvents: (events: any[]) => string;
+  updateEvent: (input: any) => string;
+  deleteEvent: (id: string) => string;
 }
 
 export async function sendChat(
@@ -196,6 +297,9 @@ export async function sendChat(
           else if (block.name === "update_goal") result = actions.updateGoal(input);
           else if (block.name === "log_entry") result = actions.logEntry(input);
           else if (block.name === "delete_goal") result = actions.deleteGoal(input.id);
+          else if (block.name === "save_events") result = actions.saveEvents(input.events ?? []);
+          else if (block.name === "update_event") result = actions.updateEvent(input);
+          else if (block.name === "delete_event") result = actions.deleteEvent(input.id);
           else result = `Unknown tool ${block.name}`;
         } catch (e: any) {
           results.push({
@@ -288,17 +392,28 @@ export interface GeneratedPlan {
   pushMessage: string;
 }
 
+export type Intensity = "steady" | "push" | "max";
+
+const INTENSITY_GUIDE: Record<Intensity, string> = {
+  steady:
+    "STEADY intensity: a sustainable, disciplined day — roughly 4-6 focused items per day. Protect recovery and consistency.",
+  push:
+    "PUSH intensity: a demanding load — roughly 6-9 items per day, include at least one stretch action outside the comfort zone.",
+  max:
+    "MAX intensity: peak output — pack the schedule tight (8-12 items per day), early start, every open hour assigned. Only what moves the needle.",
+};
+
 export async function generatePlan(
   apiKey: string,
   scope: "daily" | "weekly",
-  data: AppData
+  data: AppData,
+  opts: { focus?: string; intensity: Intensity }
 ): Promise<GeneratedPlan> {
   const c = client(apiKey);
-  const now = new Date();
   const horizon =
     scope === "daily"
-      ? `TODAY, ${todayISO()}. Every item dated ${todayISO()}. 4-8 items across the domains that have active goals, ordered by suggested time.`
-      : `THE NEXT 7 DAYS starting ${todayISO()}. Spread items across real dates with the actual weekday rhythm in mind (weekday vs weekend). 8-16 items.`;
+      ? `TODAY, ${todayISO()}. Every item dated ${todayISO()}, ordered by suggested time.`
+      : `THE NEXT 7 DAYS starting ${todayISO()}. Spread items across real dates with the actual weekday rhythm in mind (weekday vs weekend).`;
 
   const resp = await c.messages.create({
     model: MODEL,
@@ -307,11 +422,15 @@ export async function generatePlan(
 
 Build the plan for ${horizon}
 
+${INTENSITY_GUIDE[opts.intensity]}
+${opts.focus ? `The user's stated focus for this period: "${opts.focus}". Build the plan around it while keeping other goals from stalling.` : ""}
+
 Rules:
 - Items are ACTIONS, not goals: "45 min zone-2 run at 6:00", not "exercise more". Specific numbers, durations, deliverables.
 - Every item must trace to a real goal id from current_state when possible.
-- Weight the plan toward goals that are behind (low progress, near deadline) — that's what "what I need to work on" means.
-- Be honest in doing_well / needs_work. If recent check-ins are empty, say so in needs_work: showing up to report is the first standard.
+- Use the PACE data: weight the plan toward DATED goals marked BEHIND their timeline, and toward near deadlines. Keep ROUTINE goals present every day they apply.
+- Check upcoming events: schedule prep actions ahead of any event inside (or just after) this period, and never schedule conflicting work at an event's date/time.
+- Be honest in doing_well / needs_work — reference the pace data and where the timeline says they should be. If recent check-ins are empty, say so in needs_work: showing up to report is the first standard.
 - push_message: talk like a coach who expects greatness. Direct, personal, no clichés.
 
 ${contextBlock(data)}`,
@@ -320,7 +439,7 @@ ${contextBlock(data)}`,
     messages: [
       {
         role: "user",
-        content: `Generate my ${scope} plan now.`,
+        content: `Generate my ${scope} plan now at ${opts.intensity} intensity.`,
       },
     ],
   });

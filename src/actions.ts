@@ -85,5 +85,53 @@ export function makeToolActions(
       });
       return found ? `Goal ${id} archived.` : `No goal with id ${id}.`;
     },
+
+    saveEvents(events) {
+      const created = (events ?? [])
+        .filter((e: any) => e?.title && e?.date)
+        .map((e: any) => ({
+          id: uid(),
+          title: e.title,
+          date: e.date,
+          time: e.time,
+          notes: e.notes,
+          domain,
+          done: false,
+        }));
+      if (!created.length) return "No valid events provided.";
+      update((d) => ({ ...d, events: [...d.events, ...created] }));
+      return `Saved ${created.length} event(s): ${created
+        .map((e: any) => `${e.title} on ${e.date} [event:${e.id}]`)
+        .join("; ")}`;
+    },
+
+    updateEvent(input) {
+      let found = false;
+      update((d) => {
+        const e = d.events.find((x) => x.id === input.id);
+        if (!e) return d;
+        found = true;
+        if (input.title) e.title = input.title;
+        if (input.date) e.date = input.date;
+        if (input.time !== undefined) e.time = input.time;
+        if (input.notes !== undefined) e.notes = input.notes;
+        if (typeof input.done === "boolean") e.done = input.done;
+        return d;
+      });
+      return found ? `Event ${input.id} updated.` : `No event with id ${input.id}.`;
+    },
+
+    deleteEvent(id) {
+      let found = false;
+      update((d) => {
+        const idx = d.events.findIndex((x) => x.id === id);
+        if (idx >= 0) {
+          d.events.splice(idx, 1);
+          found = true;
+        }
+        return d;
+      });
+      return found ? `Event ${id} deleted.` : `No event with id ${id}.`;
+    },
   };
 }

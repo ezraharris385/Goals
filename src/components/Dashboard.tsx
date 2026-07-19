@@ -1,5 +1,5 @@
 import { useStore } from "../store";
-import { DOMAINS, DOMAIN_META, todayISO } from "../types";
+import { daysUntil, DOMAINS, DOMAIN_META, todayISO } from "../types";
 import { Ring } from "./Ring";
 
 function computeStreak(dates: Set<string>): number {
@@ -142,6 +142,63 @@ export function Dashboard({ goTo }: { goTo: (tab: string) => void }) {
           ))
         )}
       </div>
+
+      {(() => {
+        const radar = [
+          ...data.events
+            .filter((e) => !e.done && daysUntil(e.date) >= 0 && daysUntil(e.date) <= 30)
+            .map((e) => ({
+              id: `e-${e.id}`,
+              title: e.title,
+              date: e.date,
+              time: e.time,
+              domain: e.domain,
+              kind: "event" as const,
+            })),
+          ...active
+            .filter((g) => g.deadline && daysUntil(g.deadline) >= 0 && daysUntil(g.deadline) <= 14)
+            .map((g) => ({
+              id: `g-${g.id}`,
+              title: `Deadline: ${g.title}`,
+              date: g.deadline!,
+              time: undefined as string | undefined,
+              domain: g.domain,
+              kind: "deadline" as const,
+            })),
+        ]
+          .sort((x, y) => x.date.localeCompare(y.date))
+          .slice(0, 6);
+        return radar.length ? (
+          <div className="card">
+            <h3>On the Radar</h3>
+            {radar.map((r) => {
+              const days = daysUntil(r.date);
+              return (
+                <div className="action" key={r.id}>
+                  <div
+                    className="event-days"
+                    style={{
+                      color: days <= 3 ? "var(--danger)" : DOMAIN_META[r.domain].color,
+                    }}
+                  >
+                    {days === 0 ? "TODAY" : `${days}d`}
+                  </div>
+                  <div>
+                    <div className="action-text">
+                      {r.kind === "event" ? "📅 " : "⏳ "}
+                      {r.title}
+                    </div>
+                    <div className="action-meta" style={{ color: DOMAIN_META[r.domain].color }}>
+                      {r.date}
+                      {r.time ? ` · ${r.time}` : ""} · {DOMAIN_META[r.domain].label}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : null;
+      })()}
 
       {a && (
         <>
