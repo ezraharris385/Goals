@@ -86,8 +86,14 @@ export function Calendar() {
 
   const shift = (dir: number) => {
     const d = new Date(anchor);
-    if (mode === "month") d.setMonth(d.getMonth() + dir);
-    else d.setDate(d.getDate() + 7 * dir);
+    if (mode === "month") {
+      // Pin to the 1st before shifting so short months aren't skipped
+      // (e.g. Jan 31 + 1 month must land on Feb, not overflow to March).
+      d.setDate(1);
+      d.setMonth(d.getMonth() + dir);
+    } else {
+      d.setDate(d.getDate() + 7 * dir);
+    }
     setAnchor(d);
   };
 
