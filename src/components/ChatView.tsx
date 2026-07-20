@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { buildBlueprint, friendlyError, sendChat } from "../ai";
 import { makeToolActions } from "../actions";
 import { useStore } from "../store";
-import { Domain, DOMAIN_META, DOMAINS, uid } from "../types";
+import { Domain, DOMAIN_META, DOMAINS, PendingGoal, uid } from "../types";
+import { PendingReview } from "./PendingReview";
 
 const INTROS: Record<Domain, string> = {
   health:
@@ -90,9 +91,8 @@ export function ChatView() {
         },
         data
       );
-      const now = new Date().toISOString();
-      update((d) => {
-        d.goals.push({
+      const proposed: PendingGoal[] = [
+        {
           id: uid(),
           domain,
           timeframe: "long_term",
@@ -101,43 +101,33 @@ export function ChatView() {
           metric: bp.outcome.metric,
           target: bp.outcome.target,
           deadline: bp.outcome.deadline,
-          progress: 0,
-          status: "active",
-          createdAt: now,
-        });
-        for (const m of bp.milestones) {
-          d.goals.push({
-            id: uid(),
-            domain,
-            timeframe: "short_term",
-            title: m.title,
-            why: `Milestone toward: ${bp.outcome.title}`,
-            metric: m.metric,
-            target: m.target,
-            deadline: m.deadline,
-            progress: 0,
-            status: "active",
-            createdAt: now,
-          });
-        }
-        for (const r of bp.routines) {
-          d.goals.push({
-            id: uid(),
-            domain,
-            timeframe: r.timeframe,
-            title: r.title,
-            why: `Compounds toward: ${bp.outcome.title}`,
-            metric: r.metric,
-            progress: 0,
-            status: "active",
-            createdAt: now,
-          });
-        }
+        },
+        ...bp.milestones.map((m) => ({
+          id: uid(),
+          domain,
+          timeframe: "short_term" as const,
+          title: m.title,
+          why: `Milestone toward: ${bp.outcome.title}`,
+          metric: m.metric,
+          target: m.target,
+          deadline: m.deadline,
+        })),
+        ...bp.routines.map((r) => ({
+          id: uid(),
+          domain,
+          timeframe: r.timeframe,
+          title: r.title,
+          why: `Compounds toward: ${bp.outcome.title}`,
+          metric: r.metric,
+        })),
+      ];
+      update((d) => {
+        d.pending = [...d.pending, ...proposed];
         d.chats[domain] = [
           ...(d.chats[domain] ?? []),
           {
             role: "assistant",
-            content: `🏔 BLUEPRINT: ${bp.outcome.title} — by ${bp.outcome.deadline}\n\n${bp.summary}\n\nFiled on your board: the summit goal, ${bp.milestones.length} milestone${bp.milestones.length === 1 ? "" : "s"} with staged deadlines${bp.milestones.length ? ` (first: "${bp.milestones[0].title}" by ${bp.milestones[0].deadline})` : ""}, and ${bp.routines.length} routine${bp.routines.length === 1 ? "" : "s"}. Report to me as you knock them down.`,
+            content: `🏔 BLUEPRINT: ${bp.outcome.title} — by ${bp.outcome.deadline}\n\n${bp.summary}\n\nI've drafted the path: the summit goal, ${bp.milestones.length} milestone${bp.milestones.length === 1 ? "" : "s"} with staged deadlines${bp.milestones.length ? ` (first: "${bp.milestones[0].title}" by ${bp.milestones[0].deadline})` : ""}, and ${bp.routines.length} routine${bp.routines.length === 1 ? "" : "s"}. Review the card below, check what you want, and confirm — then report to me as you knock them down.`,
             at: new Date().toISOString(),
           },
         ];
@@ -192,6 +182,8 @@ export function ChatView() {
       </button>
 
       {error && <div className="error-banner">{error}</div>}
+
+      <PendingReview />
 
       <div className="chat-scroll">
         {messages.length === 0 && (

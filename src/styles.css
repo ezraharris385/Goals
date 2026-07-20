@@ -430,18 +430,35 @@ h1.title {
   background: none;
   border: none;
   color: var(--text-dim);
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   padding: 9px 0 8px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 3px;
+  white-space: nowrap;
 }
-.tab .ico { font-size: 21px; line-height: 1; }
+.tab .ico { font-size: 20px; line-height: 1; position: relative; }
 .tab.active { color: var(--accent); }
+
+.tab-badge {
+  position: absolute;
+  top: -4px;
+  right: -10px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: white;
+  font-size: 10px;
+  font-weight: 900;
+  line-height: 16px;
+  text-align: center;
+}
 
 /* ---------- forms / settings ---------- */
 .field-label {
@@ -660,6 +677,115 @@ select.text-input { appearance: none; }
   text-align: center;
   line-height: 1.3;
 }
+
+/* ---------- pending review ---------- */
+.review-card {
+  border-color: rgba(255, 95, 46, 0.4);
+  background: linear-gradient(135deg, rgba(255, 95, 46, 0.08), rgba(168, 85, 247, 0.06)),
+    var(--bg-card);
+}
+.review-item {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--line);
+}
+.review-item:last-of-type { border-bottom: none; }
+.review-item.muted { opacity: 0.45; }
+.review-title { font-size: 15px; font-weight: 700; line-height: 1.3; }
+.review-selects { display: flex; gap: 8px; margin-top: 8px; }
+.review-selects select {
+  flex: 1;
+  background: var(--bg-card2);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 7px 8px;
+  outline: none;
+  appearance: none;
+}
+
+/* ---------- calendar ---------- */
+.cal-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.cal-arrow {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--bg-card);
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1;
+}
+.cal-label { font-size: 17px; font-weight: 900; }
+
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+.cal-dow { margin-bottom: 6px; }
+.cal-dow-cell {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--text-dim);
+}
+.cal-cell {
+  aspect-ratio: 1;
+  border: 1px solid transparent;
+  background: var(--bg-card2);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  color: var(--text);
+  padding: 0;
+}
+.cal-cell.empty { background: transparent; }
+.cal-cell.today { border-color: var(--accent); }
+.cal-cell.sel { background: rgba(255, 95, 46, 0.18); border-color: var(--accent); }
+.cal-num { font-size: 14px; font-weight: 700; }
+.cal-dots { display: flex; gap: 2px; align-items: center; min-height: 6px; }
+.cal-dot { width: 6px; height: 6px; border-radius: 50%; }
+.cal-more { font-size: 10px; font-weight: 900; color: var(--text-dim); line-height: 1; }
+
+.cal-item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line);
+}
+.cal-item:last-child { border-bottom: none; }
+.cal-item.done { opacity: 0.5; }
+.cal-item.done .cal-item-title { text-decoration: line-through; }
+.cal-item-icon { font-size: 15px; min-width: 18px; text-align: center; }
+.cal-item-title { font-size: 15px; font-weight: 600; line-height: 1.3; }
+.cal-item-meta { font-size: 12px; font-weight: 600; margin-top: 2px; }
+
+.week-day { padding: 12px 14px; }
+.week-day-head {
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+.week-day-head.today { color: var(--accent); }
+.week-empty { color: var(--text-dim); font-size: 14px; padding: 2px 0; }
 
 /* ---------- onboarding ---------- */
 .onboard { padding-bottom: 30px; }

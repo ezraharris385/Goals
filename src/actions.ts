@@ -1,5 +1,5 @@
 import { ToolActions } from "./ai";
-import { AppData, Domain, Goal, Timeframe, todayISO, uid } from "./types";
+import { AppData, Domain, PendingGoal, Timeframe, todayISO, uid } from "./types";
 
 const TF: Timeframe[] = ["daily", "weekly", "monthly", "yearly", "short_term", "long_term"];
 
@@ -10,7 +10,7 @@ export function makeToolActions(
 ): ToolActions {
   return {
     saveGoals(goals) {
-      const created: Goal[] = goals
+      const proposed: PendingGoal[] = goals
         .filter((g) => g.title)
         .map((g) => ({
           id: uid(),
@@ -23,15 +23,12 @@ export function makeToolActions(
           metric: g.metric,
           target: g.target,
           deadline: g.deadline,
-          progress: 0,
-          status: "active",
-          createdAt: new Date().toISOString(),
         }));
-      if (!created.length) return "No valid goals provided.";
-      update((d) => ({ ...d, goals: [...d.goals, ...created] }));
-      return `Saved ${created.length} goal(s): ${created
-        .map((g) => `${g.title} [id:${g.id}]`)
-        .join("; ")}`;
+      if (!proposed.length) return "No valid goals provided.";
+      update((d) => ({ ...d, pending: [...d.pending, ...proposed] }));
+      return `Proposed ${proposed.length} goal(s) for the user to REVIEW and approve (NOT saved yet — they'll appear in a review card where the user checks off which to keep): ${proposed
+        .map((g) => g.title)
+        .join("; ")}. Tell the user briefly to review the card and confirm.`;
     },
 
     updateGoal(input) {

@@ -98,10 +98,23 @@ export interface ChatMsg {
   at: string;
 }
 
+// A goal proposed by an AI agent, awaiting user approval.
+export interface PendingGoal {
+  id: string;
+  domain: Domain;
+  timeframe: Timeframe;
+  title: string;
+  why?: string;
+  metric?: string;
+  target?: string;
+  deadline?: string;
+}
+
 export interface AppData {
   goals: Goal[];
   entries: Entry[];
   events: EventItem[];
+  pending: PendingGoal[];
   plans: { daily?: Plan; weekly?: Plan };
   chats: Record<Domain, ChatMsg[]>;
   assessment?: Assessment;
@@ -132,9 +145,24 @@ export const emptyData = (): AppData => ({
   goals: [],
   entries: [],
   events: [],
+  pending: [],
   plans: {},
   chats: { health: [], personal: [], professional: [] },
   settings: { apiKey: "" },
+});
+
+export const pendingToGoal = (p: PendingGoal): Goal => ({
+  id: p.id,
+  domain: p.domain,
+  timeframe: p.timeframe,
+  title: p.title,
+  why: p.why,
+  metric: p.metric,
+  target: p.target,
+  deadline: p.deadline,
+  progress: 0,
+  status: "active",
+  createdAt: new Date().toISOString(),
 });
 
 // Routine goals recur on a cadence; dated goals march toward a deadline.

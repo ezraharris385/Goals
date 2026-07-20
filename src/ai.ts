@@ -55,7 +55,7 @@ const chatTools: Anthropic.Tool[] = [
   {
     name: "save_goals",
     description:
-      "Save one or more structured goals extracted from the conversation. Call this whenever the user states a goal, even casually. Sharpen vague goals into specific, measurable ones before saving.",
+      "PROPOSE one or more structured goals for the user to review and approve — nothing is saved until the user checks it off in a review card. Call this ONLY for distinct aims the user clearly stated. Be conservative: consolidate closely related aims into a single goal rather than splitting one intention into many. Do not invent goals the user didn't ask for, and don't re-propose goals that already exist. Sharpen vague goals into specific, measurable ones before proposing. When in doubt, propose fewer.",
     input_schema: {
       type: "object",
       properties: { goals: { type: "array", items: GOAL_SCHEMA } },
@@ -232,7 +232,8 @@ function chatSystem(domain: Domain, data: AppData): string {
 You are one of three coach agents inside ZENITH, the user's personal goal command center. The user's stated identity goal: operate in the top 1% — world-class standards in life and in work, and they've asked to be pushed hard to get there. Hold them to that. Every session.
 
 How you operate:
-- When the user shares a goal — even loosely — interrogate it briefly if needed (one or two sharp questions max), then SAVE it with the save_goals tool as a specific, measurable goal with the right timeframe. Don't let vague goals live. "Get fit" becomes a metric and a deadline.
+- When the user shares a goal — even loosely — interrogate it briefly if needed (one or two sharp questions max), then PROPOSE it with the save_goals tool as a specific, measurable goal with the right timeframe. Proposed goals are NOT saved — the user reviews them in a checkbox card and confirms which to keep, so tell them to review and confirm.
+- Propose goals SPARINGLY. One clear aim = one goal. Consolidate related sub-aims into a single goal rather than flooding the board with many. Don't propose a goal the user didn't clearly ask for, and never re-propose something already on the board. When unsure, propose fewer or ask first. "Get fit" becomes ONE goal with a metric and a deadline — not five.
 - LOCATE the specific goal before acting. current_state groups goals by timeframe with pace data — when the user mentions work, match it to the exact goal id in the relevant timeframe (e.g. "did my pushups" → the daily ROUTINE goal; "studied for the exam" → the DATED goal with that deadline). Name the goal you're updating so they know you're tracking the right thing.
 - Distinguish ROUTINE from DATE-SPECIFIC. Recurring habits (pushups, weekly reviews) are daily/weekly goals. Things happening on a specific date (interview, race, exam, launch, trip) are EVENTS — save them with save_events so they show on the upcoming radar. If an event also needs sustained prep, save a goal for the prep too and mention both.
 - Use the pace data. If a DATED goal is BEHIND its timeline, say so with the numbers and make it today's priority. If AHEAD, acknowledge it and raise the bar. The grand scheme matters: connect today's work to where the timeline says they should be.
@@ -532,8 +533,10 @@ export async function importGoals(
     max_tokens: 8000,
     system: `You turn a raw brain dump of goals into a clean, structured goal list for a high-standards goal tracker. Today is ${todayISO()}.
 
+These goals will be shown to the user for review and approval before anything is saved, so aim for a clean, tight list they'd actually confirm.
+
 Rules:
-- Extract EVERY distinct goal mentioned. Split compound statements into separate goals.
+- Extract each distinct goal the user actually stated. Split a compound sentence into separate goals ONLY when they are genuinely different aims. Consolidate closely-related items ("eat better, cook more, cut sugar") into one goal ("clean up nutrition") rather than over-splitting. Don't pad the list.
 - Sharpen vague goals: give each a concrete metric and target where the text allows. Don't invent specifics the user clearly didn't imply — leave metric/target empty instead.
 - Classify domain: health (body, fitness, sleep, food, mental health), professional (career, work, skills, income, business), personal (everything else — relationships, habits, money management, learning for fun, character).
 - Pick timeframe: daily/weekly/monthly/yearly for recurring-cadence goals; short_term (< ~3 months) or long_term for horizon goals.

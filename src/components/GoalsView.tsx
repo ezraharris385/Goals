@@ -10,11 +10,13 @@ import {
   Goal,
   goalPace,
   isRoutine,
+  PendingGoal,
   Timeframe,
   TIMEFRAMES,
   todayISO,
   uid,
 } from "../types";
+import { PendingReview } from "./PendingReview";
 
 const PACE_STYLE: Record<string, { label: string; color: string }> = {
   ahead: { label: "▲ Ahead", color: "var(--health)" },
@@ -56,25 +58,17 @@ export function GoalsView() {
       if (!goals.length) {
         setDumpMsg("Couldn't find any goals in that — try writing them more directly.");
       } else {
-        update((d) => ({
-          ...d,
-          goals: [
-            ...d.goals,
-            ...goals.map((g) => ({
-              id: uid(),
-              domain: g.domain,
-              timeframe: g.timeframe,
-              title: g.title,
-              why: g.why,
-              metric: g.metric,
-              target: g.target,
-              deadline: g.deadline,
-              progress: 0,
-              status: "active" as const,
-              createdAt: new Date().toISOString(),
-            })),
-          ],
+        const proposed: PendingGoal[] = goals.map((g) => ({
+          id: uid(),
+          domain: g.domain,
+          timeframe: g.timeframe,
+          title: g.title,
+          why: g.why,
+          metric: g.metric,
+          target: g.target,
+          deadline: g.deadline,
         }));
+        update((d) => ({ ...d, pending: [...d.pending, ...proposed] }));
         setDumpText("");
         setShowDump(false);
         setDumpMsg("");
@@ -181,6 +175,8 @@ export function GoalsView() {
           📅 Upcoming
         </button>
       </div>
+
+      <PendingReview />
 
       {view === "goals" && (
         <>
